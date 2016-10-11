@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:cache="http://www.springframework.org/schema/cache"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+       xmlns:jee="http://www.springframework.org/schema/jee"
+       xmlns:jms="http://www.springframework.org/schema/jms"
+       xmlns:lang="http://www.springframework.org/schema/lang"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:oxm="http://www.springframework.org/schema/oxm"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:task="http://www.springframework.org/schema/task"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:websocket="http://www.springframework.org/schema/websocket"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee.xsd
+		http://www.springframework.org/schema/jms http://www.springframework.org/schema/jms/spring-jms.xsd
+		http://www.springframework.org/schema/lang http://www.springframework.org/schema/lang/spring-lang.xsd
+		http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
+		http://www.springframework.org/schema/oxm http://www.springframework.org/schema/oxm/spring-oxm.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
+		http://www.springframework.org/schema/websocket http://www.springframework.org/schema/websocket/spring-websocket.xsd">
+
+
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>classpath:redis.properties</value>
+            </list>
+        </property>
+    </bean>
+    <!-- redis pool config 统一的线程池配置 -->
+    <bean id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <!-- 最大活跃连接数 -->
+        <property name="maxTotal" value="${redis.pool.maxActive}" />
+        <!-- 最大闲置数量 -->
+        <property name="maxIdle" value="${redis.pool.maxIdle}" />
+        <!-- 最大等待时间 -->
+        <property name="maxWaitMillis" value="${redis.pool.maxWait}" />
+        <!-- 调用borrow时是否检查其有效性 -->
+        <property name="testOnBorrow" value="${redis.pool.testOnBorrow}" />
+        <!-- 调用return时是否检查其有效性 -->
+        <property name="testOnReturn" value="${redis.pool.testOnReturn}" />
+        <!-- 空闲时是否检查对象有效性 -->
+        <property name="testWhileIdle" value="${redis.pool.testWhileIdle}" />
+    </bean>
+    <!-- jedis pool -->
+    <bean id="sentinelJedisPool" class="redis.clients.jedis.JedisSentinelPool">
+
+        <constructor-arg index="0" value="${gredis1.master.name}" />
+        <!-- sentinels -->
+        <constructor-arg index="1">
+            <set>
+                <value>${redis1.host}</value>
+                <value>${redis2.host}</value>
+                <value>${redis3.host}</value>
+            </set>
+        </constructor-arg>
+        <constructor-arg index="2" ref="jedisPoolConfig" />
+        <constructor-arg index="3" type="int" value="${redis.pool.maxWait}" />
+    </bean>
+    <bean id="sentinelJedisPool2" class="redis.clients.jedis.JedisSentinelPool">
+
+        <constructor-arg index="0" value="${gredis1.master.name}" />
+        <!-- sentinels -->
+        <constructor-arg index="1">
+            <set>
+                <value>${redis4.host}</value>
+                <value>${redis5.host}</value>
+                <value>${redis6.host}</value>
+            </set>
+        </constructor-arg>
+        <constructor-arg index="2" ref="jedisPoolConfig" />
+        <constructor-arg index="3" type="int" value="${redis.pool.maxWait}" />
+    </bean>
+
+    <!-- jedisTemplate 通用 redis 保存锁，计数等对象 -->
+    <bean id="jedisSentinelTemplate" class="com.stone.cache.redis.JedisSentinelTemplate" >
+        <!-- key 值 从 1 开始 -->
+        <property name="shards">
+            <map>
+                <entry key="1" value-ref="sentinelJedisPool"/>
+                <entry key="2" value-ref="sentinelJedisPool2"/>
+            </map>
+        </property>
+    </bean>
+
+    <context:annotation-config/>
+    <context:component-scan base-package="com.stone.cache.test"/>
+    <aop:aspectj-autoproxy proxy-target-class="true" />
+
+    <!-- 注解缓存 -->
+    <bean id="cachez" class="com.stone.cache.support.jedis.CachezJedis" >
+        <property name="jedisSentinelTemplate" ref="jedisSentinelTemplate" />
+    </bean>
+    <bean id="cachezMapManager" class="com.stone.cache.support.DefaulteCachezManager">
+        <property name="cachez" ref="cachez"/>
+    </bean>
+    <bean id="cacheManagerAspect" class="com.stone.cache.support.CacheManagerAspect">
+        <property name="cachezManager" ref="cachezMapManager"/>
+    </bean>
+
+
+</beans>
